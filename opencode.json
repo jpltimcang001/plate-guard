@@ -1,0 +1,134 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "plan": {
+      "mode": "primary",
+      "model": "anthropic/claude-haiku-4-20250514",
+      "temperature": 0.1,
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      },
+      "prompt": "You are a senior product manager and solution architect. Produce PRDs, user stories, acceptance criteria, technical architecture, sequence diagrams, sprint plans, and implementation plans. Never generate code."
+    },
+
+    "build": {
+      "mode": "primary",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "temperature": 0.1,
+      "permission": {
+        "edit": "allow",
+        "bash": "allow"
+      },
+      "prompt": "{file:./prompts/build.txt}"
+    },
+
+    "architect": {
+      "mode": "subagent",
+      "description": "Architecture and design review",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "temperature": 0.1,
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      },
+      "prompt": "Review architecture, SOLID principles, design patterns, scalability, dependency injection, repository pattern, service layer pattern, and domain separation."
+    },
+
+    "computer-vision": {
+      "mode": "subagent",
+      "description": "YOLOv8, OCR and camera processing specialist",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "temperature": 0.1,
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      },
+      "prompt": "Review computer vision code. Focus on YOLOv8, OpenCV, PaddleOCR, tracking, polygon zones, RTSP streams, GPU optimization, frame skipping, detection accuracy, and memory usage."
+    },
+
+    "database-engineer": {
+      "mode": "subagent",
+      "description": "Database and SQLAlchemy specialist",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "temperature": 0.1,
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      },
+      "prompt": "Review SQLAlchemy models, migrations, indexes, query performance, repository patterns, and SQLite optimization."
+    },
+
+    "desktop-ui": {
+      "mode": "subagent",
+      "description": "PySide6 desktop UI specialist",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "temperature": 0.1,
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      },
+      "prompt": "Review PySide6 UI, threading, responsiveness, UX, camera preview rendering, and system tray implementation."
+    },
+
+    "security-reviewer": {
+      "mode": "subagent",
+      "description": "Security specialist",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "temperature": 0.1,
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      },
+      "prompt": "Review webhook security, credential storage, authentication, secrets management, input validation, and local file security."
+    },
+
+    "qa-engineer": {
+      "mode": "subagent",
+      "description": "Testing specialist",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "temperature": 0.1,
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      },
+      "prompt": "Review unit tests, integration tests, performance tests, edge cases, concurrency issues, and coverage."
+    },
+
+    "release-engineer": {
+      "mode": "subagent",
+      "description": "Packaging and deployment specialist",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "temperature": 0.1,
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      },
+      "prompt": "Review PyInstaller configuration, Inno Setup installer, Windows services, auto-update strategy, GitHub Actions, release pipelines, and production deployment."
+    },
+
+    "documentation": {
+      "mode": "subagent",
+      "description": "Documentation specialist",
+      "model": "anthropic/claude-haiku-4-20250514",
+      "temperature": 0.1,
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      },
+      "prompt": "Generate and review PRDs, architecture documents, ERDs, API documentation, setup guides, deployment guides, and release notes."
+    },
+
+    "code-reviewer": {
+      "mode": "subagent",
+      "description": "General code reviewer",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "temperature": 0.1,
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      },
+      "prompt": "Review code for maintainability, readability, architecture compliance, performance, and best practices."
+    }
+  }
+}

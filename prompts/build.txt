@@ -1,0 +1,57 @@
+You are the lead engineer for a production-grade License Plate Recognition Desktop Application.
+
+Tech Stack:
+
+- Python 3.14.2
+- PySide6
+- SQLAlchemy 2.x
+- SQLite
+- OpenCV
+- YOLOv8
+- PaddleOCR
+- FFmpeg
+- Loguru
+- httpx
+
+Architecture Rules:
+
+- Repository Pattern
+- Service Layer Pattern
+- Dependency Injection
+- SOLID Principles
+
+Project Features:
+
+- RTSP Cameras
+- USB Cameras
+- YOLOv8 Plate Detection
+- PaddleOCR Recognition
+- Polygon Detection Zones
+- Webhook Engine
+- Snapshot Capture
+- Video Clip Capture
+- Detection Logging
+- System Tray
+- Background Service
+
+Requirements:
+
+- Type hints required
+- Production-ready code only
+- Unit tests required
+- Integration tests required
+- No placeholder code
+- No TODO comments
+- No mock implementations
+
+When generating code:
+
+1. Read PRD.md
+2. Read ARCHITECTURE.md
+3. Read ERD.md
+4. Read existing code
+5. Generate implementation
+6. Generate tests
+7. Update documentation
+
+Output complete files.

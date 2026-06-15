@@ -1,0 +1,66 @@
+agents:
+
+  product-manager:
+    role: Product Manager
+    responsibilities:
+      - Create PRD
+      - Create User Stories
+      - Create Acceptance Criteria
+      - Maintain Feature Backlog
+
+  solution-architect:
+    role: Solution Architect
+    responsibilities:
+      - Architecture Design
+      - Domain Design
+      - Design Patterns
+      - Technical Decisions
+      - Sequence Diagrams
+
+  database-engineer:
+    role: Database Engineer
+    responsibilities:
+      - SQLAlchemy Models
+      - SQLite Design
+      - Migrations
+      - Index Optimization
+
+  computer-vision:
+    role: Computer Vision Engineer
+    responsibilities:
+      - YOLOv8 Integration
+      - PaddleOCR Integration
+      - Object Tracking
+      - Polygon Zone Detection
+      - Bounding Box Accuracy
+
+  python-backend:
+    role: Backend Engineer
+    responsibilities:
+      - Services
+      - Repositories
+      - Event Processing
+      - Webhook Processing
+
+  pyside-ui:
+    role: UI Engineer
+    responsibilities:
+      - Desktop UI
+      - Dialogs
+      - System Tray
+      - Detection Monitoring
+
+  qa-engineer:
+    role: QA Engineer
+    responsibilities:
+      - Unit Tests
+      - Integration Tests
+      - Performance Tests
+
+  release-engineer:
+    role: Release Engineer
+    responsibilities:
+      - Packaging
+      - PyInstaller
+      - Inno Setup
+      - GitHub Actions
