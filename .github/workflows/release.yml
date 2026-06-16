@@ -1,0 +1,326 @@
+# ==============================================================================
+# GitHub Actions Release Pipeline — Plate Guard
+#
+# Triggered by:
+#   - Pushing a tag matching v*.*.*  (e.g. v1.0.0, v1.2.3-rc1)
+#   - Manual workflow_dispatch with a version input
+#
+# Produces:
+#   PlateRecognitionSetup.exe  (Inno Setup installer)
+#   PlateGuard-portable.zip    (portable PyInstaller build)
+#
+# The installer is attached to the GitHub Release as an asset.
+# ==============================================================================
+
+name: Release
+
+"on":
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Semantic version (e.g. 1.2.3)"
+        required: true
+        type: string
+
+# ---------------------------------------------------------------------------
+# Environment
+# ---------------------------------------------------------------------------
+env:
+  PYTHON_VERSION: "3.14.2"
+  PROJECT_NAME: "PlateGuard"
+  ASSET_NAME: "PlateRecognitionSetup"
+
+# ---------------------------------------------------------------------------
+# Jobs
+# ---------------------------------------------------------------------------
+jobs:
+  # -------------------------------------------------------------------------
+  # 1. Test — run the full test suite on all platforms
+  # -------------------------------------------------------------------------
+  test:
+    name: "Test (${{ matrix.os }})"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libgl1-mesa-glx \
+            libglib2.0-0 \
+            libsm6 \
+            libxext6 \
+            libxrender-dev \
+            libgomp1 \
+            ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,test]" 2>/dev/null || pip install \
+            PySide6 \
+            sqlalchemy>=2.0 \
+            opencv-python-headless \
+            ultralytics \
+            paddleocr \
+            httpx \
+            loguru \
+            numpy \
+            pytest \
+            pytest-cov
+
+      - name: Run unit tests
+        run: |
+          pytest tests/unit/ -v --tb=short --cov=src --cov-report=term-missing
+
+      - name: Run integration tests
+        if: runner.os == 'Linux'
+        run: |
+          pytest tests/integration/ -v --tb=short
+
+  # -------------------------------------------------------------------------
+  # 2. Build — create PyInstaller bundle + Inno Setup installer (Windows only)
+  # -------------------------------------------------------------------------
+  build:
+    name: "Build Windows Installer"
+    needs: [test]
+    runs-on: windows-latest
+    # Only run on Windows (the matrix above tests Linux, but build is Windows-only)
+    if: always() && needs.test.result == 'success'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install build tools
+        shell: pwsh
+        run: |
+          # PyInstaller
+          pip install pyinstaller
+
+          # Inno Setup (via Chocolatey)
+          choco install innosetup --no-progress -y
+          echo "ISCC_DIR=C:\Program Files (x86)\Inno Setup 6" >> $env:GITHUB_ENV
+
+      - name: Install project dependencies
+        shell: pwsh
+        run: |
+          pip install --upgrade pip
+          pip install \
+            PySide6 \
+            sqlalchemy>=2.0 \
+            opencv-python \
+            ultralytics \
+            paddleocr \
+            httpx \
+            loguru \
+            numpy \
+            torch \
+            torchvision \
+            --extra-index-url https://download.pytorch.org/whl/cpu
+
+      - name: Create assets directory and placeholder icon
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "assets" -Force | Out-Null
+          if (-not (Test-Path "assets/icon.ico")) {
+            Write-Warning "No assets/icon.ico found — generating placeholder."
+            python scripts/gen_placeholder_icon.py
+          }
+
+      - name: Create placeholder YOLO model (for build verification)
+        shell: pwsh
+        run: |
+          # The build will succeed without a real model file,
+          # but PyInstaller will emit a warning.
+          New-Item -ItemType Directory -Path "models" -Force | Out-Null
+          if (-not (Test-Path "models/plate.pt")) {
+            # Create an empty placeholder so the spec doesn't error
+            $null = New-Item -ItemType File -Path "models/plate.pt" -Force
+            Write-Warning "models/plate.pt is a placeholder. Replace with actual YOLO weights before release."
+          }
+
+      - name: Build with PyInstaller
+        shell: pwsh
+        run: |
+          $version = "${{ github.event.inputs.version || github.ref_name }}"
+          $version = $version -replace '^v', ''
+          pyinstaller plate_guard.spec -- --version $version
+
+      - name: Verify PyInstaller output
+        shell: pwsh
+        run: |
+          $exePath = "build\exe.win-amd64-3.14\PlateGuard\PlateGuard.exe"
+          if (-not (Test-Path $exePath)) {
+            Write-Error "PyInstaller did not produce PlateGuard.exe"
+            exit 1
+          }
+          $size = (Get-Item $exePath).Length
+          Write-Host "PlateGuard.exe size: $([math]::Round($size / 1MB, 2)) MB"
+
+      - name: Create portable zip archive
+        shell: pwsh
+        run: |
+          $version = "${{ github.event.inputs.version || github.ref_name }}"
+          $version = $version -replace '^v', ''
+          $zipName = "PlateGuard-portable-$version.zip"
+          Compress-Archive -Path "build\exe.win-amd64-3.14\PlateGuard\*" -DestinationPath $zipName
+          Write-Host "Created $zipName"
+
+      - name: Install Visual C++ Redistributable (for build machine)
+        shell: pwsh
+        run: |
+          # Download VC++ redist so Inno Setup can bundle it
+          $url = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+          $out = "installer\redist\vc_redist.x64.exe"
+          New-Item -ItemType Directory -Path "installer\redist" -Force | Out-Null
+          Invoke-WebRequest -Uri $url -OutFile $out
+          Write-Host "Downloaded VC++ redist to $out"
+
+      - name: Build Inno Setup installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ISCC_DIR}\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            # Fallback: look in Program Files
+            $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          }
+          if (-not (Test-Path $iscc)) {
+            Write-Error "Inno Setup compiler not found at $iscc"
+            exit 1
+          }
+          & $iscc "installer\setup.iss"
+          if (-not $?) {
+            Write-Error "Inno Setup compilation failed"
+            exit 1
+          }
+
+      - name: Verify installer exists
+        shell: pwsh
+        run: |
+          $installer = "dist\PlateRecognitionSetup.exe"
+          if (-not (Test-Path $installer)) {
+            Write-Error "Installer not found at $installer"
+            exit 1
+          }
+          $size = (Get-Item $installer).Length
+          Write-Host "Installer size: $([math]::Round($size / 1MB, 2)) MB"
+
+      - name: Upload PyInstaller bundle (portable)
+        uses: actions/upload-artifact@v4
+        with:
+          name: PlateGuard-portable-${{ github.ref_name }}
+          path: PlateGuard-portable-*.zip
+          retention-days: 7
+
+      - name: Upload Inno Setup installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ASSET_NAME }}-${{ github.ref_name }}
+          path: dist\PlateRecognitionSetup.exe
+          retention-days: 7
+
+  # -------------------------------------------------------------------------
+  # 3. Publish — create a GitHub Release and attach artifacts
+  # -------------------------------------------------------------------------
+  publish:
+    name: "Publish GitHub Release"
+    needs: [build]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      contents: write
+      discussions: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lh artifacts/
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes
+        id: notes
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $notes = @"
+          ## Plate Guard v$version
+
+          ### What's New
+          - Automated build pipeline with PyInstaller + Inno Setup
+          - YOLOv8-based license plate detection
+          - PaddleOCR text recognition
+          - RTSP and USB camera support
+          - Polygonal detection zones
+          - Webhook integration
+          - Snapshot and video clip capture
+          - Live dashboard with camera status
+
+          ### Installation
+          1. Download **PlateRecognitionSetup.exe**
+          2. Run the installer (admin privileges required for VC++ redist)
+          3. Launch Plate Guard from the Start Menu or desktop shortcut
+
+          ### Portable Version
+          Download **PlateGuard-portable-$version.zip**, extract, and run `PlateGuard.exe`.
+
+          ### System Requirements
+          - Windows 10 64-bit (22H2+) or Windows 11
+          - 8 GB RAM (16 GB recommended)
+          - NVIDIA GPU with 4+ GB VRAM (optional, for GPU acceleration)
+          - Visual C++ Redistributable 2015-2022 (included in installer)
+          - FFmpeg (optional, for advanced video codec support)
+
+          ### Notes
+          - Replace `models/plate.pt` with a trained YOLOv8 weights file before first run.
+          - PaddleOCR downloads language models on first use (internet required).
+          "@
+          $notes | Out-File -FilePath "release_notes.md" -Encoding utf8
+          echo "notes_file=release_notes.md" >> $env:GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Plate Guard v${{ steps.version.outputs.version }}"
+          body_path: ${{ steps.notes.outputs.notes_file }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
+          files: |
+            artifacts/PlateRecognitionSetup.exe
+            artifacts/PlateGuard-portable-*.zip
+          fail_on_unmatched_files: false
+          generate_release_notes: false
