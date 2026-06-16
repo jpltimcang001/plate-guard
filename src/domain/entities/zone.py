@@ -11,6 +11,8 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from src.detection.geometry import point_in_polygon
+
 
 @dataclass
 class Zone:
@@ -145,6 +147,20 @@ class Zone:
     def clear_points(self) -> None:
         """Remove all vertices."""
         self.points.clear()
+
+    def contains_point(self, x: float, y: float) -> bool:
+        """Test whether a point falls inside this polygon zone.
+
+        Args:
+            x: X-coordinate in pixel space.
+            y: Y-coordinate in pixel space.
+
+        Returns:
+            ``True`` if the point is inside (or on the boundary of)
+            the polygon.
+
+        """
+        return point_in_polygon(x, y, self.points)
 
     def validate(self) -> None:
         """Validate business rules.
