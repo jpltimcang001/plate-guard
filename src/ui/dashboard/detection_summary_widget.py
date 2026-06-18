@@ -161,6 +161,7 @@ class DetectionSummaryWidget(QWidget):
         count_layout.setContentsMargins(16, 12, 16, 12)
 
         title = QLabel("Detections Today", count_frame)
+        title.setToolTip("Total license plate detections recorded for today")
         title_font = QFont()
         title_font.setPointSize(11)
         title_font.setBold(True)
@@ -193,6 +194,7 @@ class DetectionSummaryWidget(QWidget):
 
         """
         table_label = QLabel("Recent Detections", self)
+        table_label.setToolTip("Most recent license plate detections")
         table_label_font = QFont()
         table_label_font.setPointSize(11)
         table_label_font.setBold(True)
@@ -273,8 +275,9 @@ class DetectionSummaryWidget(QWidget):
 
         if not self._recent:
             self._table.setRowCount(1)
-            empty = QTableWidgetItem("No detections yet")
+            empty = QTableWidgetItem("No detections yet — camera feeds will appear here")
             empty.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty.setForeground(_COLOR_TEXT_MUTED)
             self._table.setItem(0, 0, empty)
             self._table.setSpan(0, 0, 1, len(self.COLUMNS))
 

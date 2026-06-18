@@ -449,7 +449,7 @@ class TestDashboardWidget:
     ) -> None:
         """DashboardWidget can be created and starts with 'Ready'."""
         widget = DashboardWidget(dashboard_service=mock_dashboard_service)
-        assert widget._status_label.text() == "Ready"
+        assert widget._status_label.text() == "● Ready"
         assert widget._refresh_timer.isActive() is False
 
     def test_start_refresh_triggers_immediate_refresh(

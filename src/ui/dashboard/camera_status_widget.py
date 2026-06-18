@@ -183,6 +183,7 @@ class CameraCard(QFrame):
         status_col.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._status_label = QLabel(status.status.capitalize(), self)
+        self._status_label.setToolTip(f"Camera status: {status.status}")
         self._status_label.setStyleSheet(
             f"color: {colour.name()}; font-weight: bold; font-size: 11px;",
         )
@@ -201,6 +202,7 @@ class CameraCard(QFrame):
         self._count_label.setFont(count_font)
         self._count_label.setStyleSheet(f"color: {_COLOR_TEXT.name()};")
         self._count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._count_label.setToolTip("Detections recorded today for this camera")
         count_col.addWidget(self._count_label)
 
         count_title = QLabel("today", self)
@@ -209,6 +211,15 @@ class CameraCard(QFrame):
         )
         count_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         count_col.addWidget(count_title)
+
+        # Set card tooltip with detailed info
+        self.setToolTip(
+            f"Camera: {status.name}\n"
+            f"Type: {status.camera_type.upper()}\n"
+            f"Status: {status.status}\n"
+            f"Today's detections: {status.detection_count_today}\n"
+            f"Click to view live preview",
+        )
 
         layout.addLayout(count_col)
 

@@ -29,6 +29,10 @@ class CreateCameraRequest:
     confidence_threshold: float = 0.5
     """Detection confidence threshold (0.0–1.0)."""
 
+    evidence_mode: str = "snapshot"
+    """Evidence capture mode: ``"none"``, ``"snapshot"``, ``"video"``, or
+    ``"both"``."""
+
 
 @dataclass
 class UpdateCameraRequest:
@@ -49,6 +53,9 @@ class UpdateCameraRequest:
     confidence_threshold: float | None = None
     """New confidence threshold."""
 
+    evidence_mode: str | None = None
+    """New evidence mode. ``None`` means unchanged."""
+
 
 @dataclass
 class CameraDTO:
@@ -61,5 +68,6 @@ class CameraDTO:
     usb_index: int | None
     enabled: bool
     confidence_threshold: float
+    evidence_mode: str
     created_at: datetime | None
     updated_at: datetime | None

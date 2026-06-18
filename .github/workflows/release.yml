@@ -70,12 +70,23 @@ jobs:
             libgomp1 \
             ffmpeg
 
-      - name: Install Python dependencies
+      - name: Upgrade pip
+        shell: bash
+        run: python -m pip install --upgrade pip
+
+      - name: Install project (editable with extras)
+        id: pip_editable
+        continue-on-error: true
+        shell: bash
+        run: pip install -e ".[dev,test]"
+
+      - name: Install fallback dependencies (editable install unavailable)
+        if: steps.pip_editable.outcome == 'failure'
+        shell: bash
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev,test]" 2>/dev/null || pip install \
+          pip install \
             PySide6 \
-            sqlalchemy>=2.0 \
+            "sqlalchemy>=2.0" \
             opencv-python-headless \
             ultralytics \
             paddleocr \
@@ -127,18 +138,18 @@ jobs:
         shell: pwsh
         run: |
           pip install --upgrade pip
-          pip install \
-            PySide6 \
-            sqlalchemy>=2.0 \
-            opencv-python \
-            ultralytics \
-            paddleocr \
-            httpx \
-            loguru \
-            numpy \
-            torch \
-            torchvision \
-            --extra-index-url https://download.pytorch.org/whl/cpu
+          pip install @(
+            "PySide6",
+            "sqlalchemy>=2.0",
+            "opencv-python",
+            "ultralytics",
+            "paddleocr",
+            "httpx",
+            "loguru",
+            "numpy",
+            "torch",
+            "torchvision"
+          ) --extra-index-url https://download.pytorch.org/whl/cpu
 
       - name: Create assets directory and placeholder icon
         shell: pwsh

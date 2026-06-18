@@ -35,6 +35,12 @@ class CameraModel(Base):
         default=0.5,
         nullable=False,
     )
+    evidence_mode: Mapped[str] = mapped_column(
+        String(16),
+        default="snapshot",
+        nullable=False,
+        comment="Evidence mode: none, snapshot, video, or both",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         server_default=func.now(),

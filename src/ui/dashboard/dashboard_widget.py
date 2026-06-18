@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import numpy as np
 from loguru import logger
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPalette
 from PySide6.QtWidgets import (
     QFrame,
@@ -103,6 +103,9 @@ class DashboardWidget(QWidget):
     # Public API
     # ------------------------------------------------------------------
 
+    capture_snapshot_requested = Signal(int)
+    capture_clip_requested = Signal(int)
+
     def start_refresh(self) -> None:
         """Start the periodic data refresh.
 
@@ -160,6 +163,33 @@ class DashboardWidget(QWidget):
         self._selected_camera_id = camera_id
         self._update_preview_source(camera_id)
 
+    def get_current_frame(self, camera_id: int) -> np.ndarray | None:
+        """Grab the latest frame for a camera from its frame source.
+
+        Args:
+            camera_id: The camera ID.
+
+        Returns:
+            A BGR numpy array, or ``None`` if no frame is available.
+
+        """
+        source = self._frame_sources.get(camera_id)
+        if source is None:
+            logger.warning("No frame source for camera_id={}", camera_id)
+            return None
+        try:
+            return source()
+        except Exception:
+            logger.opt(exception=True).warning(
+                "Failed to grab frame from camera_id={}", camera_id,
+            )
+            return None
+
+    @property
+    def preview_widget(self) -> LivePreviewWidget:
+        """The live preview widget (for connecting capture signals)."""
+        return self._preview_widget
+
     # ------------------------------------------------------------------
     # Internal — UI setup
     # ------------------------------------------------------------------
@@ -202,18 +232,21 @@ class DashboardWidget(QWidget):
 
         # Summary badges row
         self._online_badge = QLabel("● 0 online", header)
+        self._online_badge.setToolTip("Number of cameras currently online")
         self._online_badge.setStyleSheet(
             f"color: {_COLOR_ONLINE.name()}; font-size: 12px; padding: 4px 12px;",
         )
         header_layout.addWidget(self._online_badge)
 
         self._offline_badge = QLabel("● 0 offline", header)
+        self._offline_badge.setToolTip("Number of cameras currently offline or disabled")
         self._offline_badge.setStyleSheet(
             f"color: {_COLOR_OFFLINE.name()}; font-size: 12px; padding: 4px 12px;",
         )
         header_layout.addWidget(self._offline_badge)
 
-        self._refresh_btn = QPushButton("Refresh", header)
+        self._refresh_btn = QPushButton("⟳ Refresh", header)
+        self._refresh_btn.setToolTip("Refresh dashboard data now")
         self._refresh_btn.setStyleSheet(
             f"QPushButton {{ "
             f"background-color: {_COLOR_ACCENT.name()}; "
@@ -251,6 +284,7 @@ class DashboardWidget(QWidget):
 
         # Camera status
         status_title = QLabel("Cameras", left_panel)
+        status_title.setToolTip("Camera status indicators — click a camera for live preview")
         status_title_font = QFont()
         status_title_font.setPointSize(11)
         status_title_font.setBold(True)
@@ -294,7 +328,8 @@ class DashboardWidget(QWidget):
             layout: The parent layout.
 
         """
-        self._status_label = QLabel("Ready", self)
+        self._status_label = QLabel("● Ready", self)
+        self._status_label.setToolTip("Current dashboard status")
         self._status_label.setStyleSheet(
             f"color: {_COLOR_TEXT_MUTED.name()}; font-size: 10px; padding: 2px 0;",
         )
@@ -307,6 +342,12 @@ class DashboardWidget(QWidget):
     def _connect_signals(self) -> None:
         """Connect widget signals."""
         self._camera_panel.camera_selected.connect(self._on_camera_selected)
+        self._preview_widget.capture_snapshot_requested.connect(
+            self._on_preview_snapshot_requested,
+        )
+        self._preview_widget.capture_clip_requested.connect(
+            self._on_preview_clip_requested,
+        )
 
     def _on_camera_selected(self, camera_id: int) -> None:
         """Handle camera card click — select for live preview.
@@ -317,17 +358,42 @@ class DashboardWidget(QWidget):
         """
         self.select_camera(camera_id)
 
+    def _on_preview_snapshot_requested(self, camera_id: int) -> None:
+        """Forward snapshot request from preview widget.
+
+        Args:
+            camera_id: The camera to capture from.
+
+        """
+        logger.debug("Snapshot requested for camera_id={}", camera_id)
+        self.capture_snapshot_requested.emit(camera_id)
+
+    def _on_preview_clip_requested(self, camera_id: int) -> None:
+        """Forward clip request from preview widget.
+
+        Args:
+            camera_id: The camera to capture from.
+
+        """
+        logger.debug("Clip requested for camera_id={}", camera_id)
+        self.capture_clip_requested.emit(camera_id)
+
     # ------------------------------------------------------------------
     # Internal — data flow
     # ------------------------------------------------------------------
 
     def _on_refresh(self) -> None:
         """Fetch fresh data from the dashboard service and update all panels."""
+        self._status_label.setText("⟳ Refreshing…")
+
         try:
             data = self._dashboard_service.refresh()
         except Exception:
             logger.opt(exception=True).warning("Dashboard refresh failed")
-            self._status_label.setText("Refresh failed — check log")
+            self._status_label.setText(
+                "⚠ Refresh failed — check the log for details. "
+                "The dashboard will retry automatically.",
+            )
             return
 
         self._cached_data = data
@@ -350,7 +416,7 @@ class DashboardWidget(QWidget):
         ts = data.refreshed_at
         ts_str = ts.strftime("%H:%M:%S") if ts else "?"
         self._status_label.setText(
-            f"Refreshed at {ts_str} · "
+            f"✓ Refreshed at {ts_str} · "
             f"{data.total_detections_today} detections today · "
             f"{len(data.cameras)} cameras",
         )
@@ -371,11 +437,15 @@ class DashboardWidget(QWidget):
                     if cam.id == camera_id:
                         name = cam.name
                         break
-            self._preview_widget.set_frame_source(source, camera_name=name)
+            self._preview_widget.set_frame_source(
+                source,
+                camera_name=name,
+                camera_id=camera_id,
+            )
             self._preview_widget.start()
         else:
             self._preview_widget.stop()
-            self._preview_widget.set_frame_source(None, camera_name="")
+            self._preview_widget.set_frame_source(None, camera_name="", camera_id=0)
 
     # ------------------------------------------------------------------
     # Lifecycle

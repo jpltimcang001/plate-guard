@@ -11,6 +11,7 @@
 | usb_index | INTEGER |
 | enabled | INTEGER |
 | confidence_threshold | REAL |
+| evidence_mode | TEXT |
 
 ---
 

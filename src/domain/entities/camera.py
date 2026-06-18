@@ -42,6 +42,11 @@ class Camera:
     confidence_threshold: float = 0.5
     """Minimum YOLOv8 confidence (0.0–1.0) for detection."""
 
+    evidence_mode: str = "snapshot"
+    """Evidence capture mode: ``"none"``, ``"snapshot"``, ``"video"``, or
+    ``"both"``.  Controls whether snapshots and/or video clips are
+    captured on detection."""
+
     created_at: Optional[datetime] = None
     """Timestamp when the camera was created."""
 
@@ -91,6 +96,13 @@ class Camera:
             raise ValueError(
                 f"Confidence threshold must be between 0.0 and 1.0, "
                 f"got {self.confidence_threshold}",
+            )
+
+        valid_modes = {"none", "snapshot", "video", "both"}
+        if self.evidence_mode not in valid_modes:
+            raise ValueError(
+                f"Evidence mode must be one of {valid_modes}, "
+                f"got {self.evidence_mode!r}",
             )
 
     # ------------------------------------------------------------------
@@ -152,6 +164,64 @@ class Camera:
         )
         camera.validate()
         return camera
+
+    # ------------------------------------------------------------------
+    # Model conversion
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_model(cls, model: Any) -> Camera:
+        """Convert an ORM CameraModel to a domain Camera entity.
+
+        Also accepts an already-converted ``Camera`` instance (returning
+        it unchanged) so that callers can safely convert both ORM models
+        and domain entities.
+
+        Args:
+            model: A ``CameraModel`` or ``Camera`` instance.
+
+        Returns:
+            A ``Camera`` domain entity.
+
+        """
+        if isinstance(model, cls):
+            return model
+
+        # Import here to avoid circular import at module level
+        from src.database.models.camera_model import CameraModel
+
+        if not isinstance(model, CameraModel):
+            msg = f"Expected CameraModel or Camera, got {type(model).__name__}"
+            raise TypeError(msg)
+
+        type_map = {"rtsp": CameraType.RTSP, "usb": CameraType.USB}
+        cam_type = type_map.get(model.type, CameraType.RTSP)
+
+        return cls(
+            id=model.id,
+            name=model.name,
+            type=cam_type,
+            rtsp_url=model.rtsp_url,
+            usb_index=model.usb_index,
+            enabled=model.enabled,
+            confidence_threshold=model.confidence_threshold,
+            evidence_mode=model.evidence_mode,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    @classmethod
+    def from_model_list(cls, models: list[Any]) -> list[Camera]:
+        """Convert a list of ORM CameraModels to domain Camera entities.
+
+        Args:
+            models: A list of ``CameraModel`` or ``Camera`` instances.
+
+        Returns:
+            A list of ``Camera`` domain entities.
+
+        """
+        return [cls.from_model(m) for m in models]
 
     def __repr__(self) -> str:
         return (

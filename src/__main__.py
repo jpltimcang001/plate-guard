@@ -86,6 +86,12 @@ def main() -> None:
     Initialises subsystems and launches the Qt main loop.
     """
     _setup_logging()
+
+    # ---- Global exception handler (installed as early as possible) -------
+    from src.utils.exception_handler import install_global_exception_handler
+
+    install_global_exception_handler(show_dialog=False)
+
     logger.info("=== Plate Guard starting ===")
 
     try:
@@ -114,6 +120,79 @@ def main() -> None:
             detection_repository=detection_repo,
         )
 
+        # Event recorder for evidence capture
+        from src.recorder.event_recorder import EventRecorder
+
+        media_dir = _get_app_data_dir() / "media"
+        event_recorder = EventRecorder(storage_dir=str(media_dir))
+
+        # ---- Sprint 4 services -------------------------------------------
+
+        # Shutdown manager (collects cleanup handlers from across the app)
+        from src.services.shutdown_manager import ShutdownManager
+
+        shutdown_mgr = ShutdownManager()
+        shutdown_mgr.register(
+            "database-session",
+            session_mgr.close_all,
+            priority=30,
+        )
+        shutdown_mgr.register(
+            "event-recorder",
+            lambda: None,  # event_recorder has no explicit close; ignored
+            priority=20,
+        )
+
+        # Camera health monitor
+        from src.monitor.camera_health_monitor import CameraHealthMonitor
+
+        camera_health_monitor = CameraHealthMonitor(
+            frame_timeout_seconds=10.0,
+            max_stale_checks=3,
+            check_interval_seconds=5.0,
+            on_camera_stale=lambda cid, snap: logger.warning(
+                "Camera {} is stale (age={:.1f}s)", cid, snap.last_frame_age,
+            ),
+            on_camera_reconnecting=lambda cid, snap: logger.warning(
+                "Camera {} reconnecting (attempts={})",
+                cid,
+                snap.reconnect_attempts,
+            ),
+            on_camera_recovered=lambda cid, snap: logger.info(
+                "Camera {} recovered (fps={:.1f})", cid, snap.fps,
+            ),
+        )
+
+        # Memory monitor
+        from src.monitor.memory_monitor import MemoryMonitor
+
+        memory_monitor = MemoryMonitor(
+            warning_mb=500.0,
+            critical_mb=1000.0,
+            check_interval_seconds=30.0,
+        )
+
+        # Evidence retention service
+        from src.services.evidence_retention import EvidenceRetentionService
+
+        evidence_retention = EvidenceRetentionService(
+            media_dir=str(media_dir),
+            retention_days=30,
+            check_interval_hours=24,
+        )
+
+        # Auto-start on Windows (non-fatal if it fails)
+        try:
+            from src.services.auto_start import enable_auto_start
+
+            if sys.platform == "win32":
+                exe_path = sys.executable
+                enable_auto_start("PlateGuard", exe_path)
+        except Exception:
+            logger.opt(exception=True).warning(
+                "Failed to configure auto-start",
+            )
+
     except Exception:
         logger.opt(exception=True).critical("Failed to build dependency graph")
         sys.exit(1)
@@ -139,6 +218,12 @@ def main() -> None:
         window = MainWindow(
             camera_service=camera_service,
             dashboard_service=dashboard_service,
+            detection_repository=detection_repo,
+            event_recorder=event_recorder,
+            shutdown_manager=shutdown_mgr,
+            camera_health_monitor=camera_health_monitor,
+            memory_monitor=memory_monitor,
+            evidence_retention=evidence_retention,
         )
         window.show()
 

@@ -38,6 +38,7 @@ def _make_camera_dto(
         usb_index=None,
         enabled=enabled,
         confidence_threshold=0.5,
+        evidence_mode="none",
         created_at=datetime.now(),
         updated_at=datetime.now(),
     )

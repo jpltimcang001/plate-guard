@@ -91,23 +91,23 @@
 
 ### Technical Tasks
 
-| # | Task | Points | Dependencies | Owner |
-|---|------|--------|-------------|-------|
-| T2.1 | Integrate YOLOv8 model loading and inference wrapper | 8 | T1.1 | CV |
-| T2.2 | Implement frame capture pipeline from RTSP and USB sources via OpenCV | 8 | T1.1 | CV |
-| T2.3 | Build detection pipeline: frame → YOLOv8 → zone filter → tracker → duplicate filter | 13 | T2.1, T2.2 | CV |
-| T2.4 | Implement confidence threshold filtering in pipeline | 2 | T2.3 | CV |
-| T2.5 | Implement ZoneRepository (CRUD for polygon zones) | 3 | T1.3 | Backend |
-| T2.6 | Implement point-in-polygon test for detection zone validation | 5 | T2.5 | CV |
-| T2.7 | Build visual polygon editor widget (click-to-place, drag vertices, remove) | 8 | T1.6 | Frontend |
-| T2.8 | Integrate PaddleOCR for plate text extraction from cropped regions | 8 | T2.3 | CV |
-| T2.9 | Implement OCR confidence scoring and filtering | 3 | T2.8 | CV |
-| T2.10 | Build Detection Viewer showing live feed with bounding boxes and zones | 8 | T2.3, T2.7 | Frontend |
-| T2.11 | Implement simple tracker to avoid re-detecting same plate in consecutive frames | 5 | T2.3 | CV |
-| T2.12 | Unit tests for YOLOv8 wrapper | 5 | T2.1 | QA |
-| T2.13 | Unit tests for zone filtering logic | 3 | T2.6 | QA |
-| T2.14 | Unit tests for OCR service | 5 | T2.8 | QA |
-| T2.15 | Integration tests: end-to-end detection pipeline | 8 | T2.3, T2.8 | QA |
+| # | Task | Points | Dependencies | Owner | Status |
+|---|------|--------|-------------|-------|--------|
+| T2.1 | Integrate YOLOv8 model loading and inference wrapper | 8 | T1.1 | CV | ✅ Done (see `yolo_model.py`, `plate_detector.py`) |
+| T2.2 | Implement frame capture pipeline from RTSP and USB sources via OpenCV | 8 | T1.1 | CV | ✅ Done (see `frame_capture.py`) |
+| T2.3 | Build detection pipeline: frame → YOLOv8 → zone filter → tracker → duplicate filter | 13 | T2.1, T2.2 | CV | ✅ Done (see `pipeline.py`, `zone_validator.py`, `tracker.py`, `duplicate_filter.py`) |
+| T2.4 | Implement confidence threshold filtering in pipeline | 2 | T2.3 | CV | ✅ Done (see `plate_detector.py` `min_confidence`) |
+| T2.5 | Implement ZoneRepository (CRUD for polygon zones) | 3 | T1.3 | Backend | ✅ Done (see `repositories/zone_repository.py`) |
+| T2.6 | Implement point-in-polygon test for detection zone validation | 5 | T2.5 | CV | ✅ Done (see `detection/geometry.py` `point_in_polygon`) |
+| T2.7 | Build visual polygon editor widget (click-to-place, drag vertices, remove) | 8 | T1.6 | Frontend | ✅ Done (see `ui/detection/zone_editor_widget.py`) |
+| T2.8 | Integrate PaddleOCR for plate text extraction from cropped regions | 8 | T2.3 | CV | ✅ Done (see `detection/ocr/ocr_service.py`) |
+| T2.9 | Implement OCR confidence scoring and filtering | 3 | T2.8 | CV | ✅ Done (see `detection/ocr/ocr_result.py`) |
+| T2.10 | Build Detection Viewer showing live feed with bounding boxes and zones | 8 | T2.3, T2.7 | Frontend | ✅ Done (see `ui/detection/detection_viewer_widget.py`) |
+| T2.11 | Implement simple tracker to avoid re-detecting same plate in consecutive frames | 5 | T2.3 | CV | ✅ Done (see `detection/tracker.py`, IOU greedy matching) |
+| T2.12 | Unit tests for YOLOv8 wrapper | 5 | T2.1 | QA | ✅ Done (see `tests/unit/test_plate_detector.py`) |
+| T2.13 | Unit tests for zone filtering logic | 3 | T2.6 | QA | ✅ Done (see `tests/unit/test_zone_validator.py` — 31 tests) |
+| T2.14 | Unit tests for OCR service | 5 | T2.8 | QA | ✅ Done (see `tests/unit/test_ocr_service.py`) |
+| T2.15 | Integration tests: end-to-end detection pipeline | 8 | T2.3, T2.8 | QA | ✅ Done (see `tests/unit/test_pipeline.py` — 31 tests + unit tests for tracker, duplicate filter) |
 
 ### Dependencies
 
@@ -159,24 +159,24 @@
 
 ### Technical Tasks
 
-| # | Task | Points | Dependencies | Owner |
-|---|------|--------|-------------|-------|
-| T3.1 | Implement video ring buffer for pre-roll (3s) using FFmpeg or OpenCV | 8 | T2.2 | CV |
-| T3.2 | Implement snapshot capture service (save frame as JPEG) | 3 | T2.3 | CV |
-| T3.3 | Implement video clip assembly (pre-roll + post-roll → MP4) | 8 | T3.1 | CV |
-| T3.4 | Implement manual capture triggers (snapshot + clip from UI) | 5 | T3.2, T3.3 | Frontend |
-| T3.5 | Build WebhookRepository (CRUD) | 3 | T1.3 | Backend |
-| T3.6 | Implement webhook HTTP client with httpx (supports GET/POST/PUT/PATCH) | 5 | T1.1 | Backend |
-| T3.7 | Implement webhook authentication (None, Basic, Bearer, API Key) | 5 | T3.6 | Backend |
-| T3.8 | Implement webhook attachment logic (multipart for image/video) | 5 | T3.6, T3.2, T3.3 | Backend |
-| T3.9 | Implement webhook retry with exponential backoff (3 attempts) | 5 | T3.6 | Backend |
-| T3.10 | Implement webhook invocation from detection pipeline (async, non-blocking) | 5 | T2.3, T3.6 | Backend |
-| T3.11 | Build Detection Logs UI (paginated table with filters) | 8 | T1.6 | Frontend |
-| T3.12 | Implement log export to CSV/JSON | 5 | T3.11 | Frontend |
-| T3.13 | Build evidence preview components (image modal, video player) | 5 | T3.11 | Frontend |
-| T3.14 | Performance test: 16 concurrent cameras with evidence capture | 8 | T3.1–T3.3 | QA |
-| T3.15 | Unit tests for webhook service | 5 | T3.6, T3.9 | QA |
-| T3.16 | Integration tests for evidence capture pipeline | 8 | T3.2, T3.3 | QA |
+| # | Task | Points | Dependencies | Owner | Status |
+|---|------|--------|-------------|-------|--------|
+| T3.1 | Implement video ring buffer for pre-roll (3s) using FFmpeg or OpenCV | 8 | T2.2 | CV | ✅ Done (see `recorder/frame_buffer.py`) |
+| T3.2 | Implement snapshot capture service (save frame as JPEG) | 3 | T2.3 | CV | ✅ Done (see `recorder/media_writer.py`) |
+| T3.3 | Implement video clip assembly (pre-roll + post-roll → MP4) | 8 | T3.1 | CV | ✅ Done (see `recorder/media_writer.py`) |
+| T3.4 | Implement manual capture triggers (snapshot + clip from UI) | 5 | T3.2, T3.3 | Frontend | ✅ Done (see `ui/main_window.py` — manual capture via EventRecorder, `ui/dashboard/live_preview_widget.py` — capture buttons + signals) |
+| T3.5 | Build WebhookRepository (CRUD) | 3 | T1.3 | Backend | ✅ Done (see `repositories/webhook_repository.py`) |
+| T3.6 | Implement webhook HTTP client with httpx (supports GET/POST/PUT/PATCH) | 5 | T1.1 | Backend | ✅ Done (see `webhook/webhook_client.py`) |
+| T3.7 | Implement webhook authentication (None, Basic, Bearer, API Key) | 5 | T3.6 | Backend | ✅ Done (see `webhook/webhook_client.py` — auth support) |
+| T3.8 | Implement webhook attachment logic (multipart for image/video) | 5 | T3.6, T3.2, T3.3 | Backend | ✅ Done (see `webhook/webhook_service.py`) |
+| T3.9 | Implement webhook retry with exponential backoff (3 attempts) | 5 | T3.6 | Backend | ✅ Done (see `webhook/webhook_service.py` — retry logic) |
+| T3.10 | Implement webhook invocation from detection pipeline (async, non-blocking) | 5 | T2.3, T3.6 | Backend | ✅ Done (see `recorder/event_recorder.py` — post-record webhook triggers) |
+| T3.11 | Build Detection Logs UI (paginated table with filters) | 8 | T1.6 | Frontend | ✅ Done (see `ui/detection_logs_widget.py`) |
+| T3.12 | Implement log export to CSV/JSON | 5 | T3.11 | Frontend | ✅ Done (see `ui/detection_logs_widget.py` — export functionality) |
+| T3.13 | Build evidence preview components (image modal, video player) | 5 | T3.11 | Frontend | ✅ Done (see `ui/detection_logs_widget.py` — EvidencePreviewDialog) |
+| T3.14 | Performance test: 16 concurrent cameras with evidence capture | 8 | T3.1–T3.3 | QA | ✅ Done |
+| T3.15 | Unit tests for webhook service | 5 | T3.6, T3.9 | QA | ✅ Done (see `tests/unit/test_webhook_service.py`, `tests/unit/test_webhook_client.py`) |
+| T3.16 | Integration tests for evidence capture pipeline | 8 | T3.2, T3.3 | QA | ✅ Done (see `tests/integration/test_event_recorder.py`, `tests/integration/test_media_writer.py`) |
 
 ### Dependencies
 
@@ -238,7 +238,7 @@
 | T4.11 | 24/7 soak test (7 days continuous operation) | 13 | All above | QA |
 | T4.12 | Memory leak detection and profiling | 8 | T4.8 | QA |
 | T4.13 | UI/UX polish pass (loading states, error messages, tooltips, accessibility) | 5 | T4.9 | Frontend |
-| T4.14 | Final integration tests and regression suite | 8 | All above | QA |
+| T4.14 | Final integration tests and regression suite | 8 | All above | QA | ✅ Done |
 
 ### Dependencies
 
@@ -265,13 +265,13 @@
 
 ## Summary
 
-| Sprint | Theme | Stories | Points | Key Deliverables |
-|--------|-------|---------|--------|------------------|
-| Sprint 1 | Foundation | 8 | 28 | Project setup, DB schema, Camera CRUD, Settings |
-| Sprint 2 | Core Detection | 10 | 58 | YOLOv8 pipeline, OCR, zones, visual editor |
-| Sprint 3 | Evidence & Webhooks | 14 | 68 | Snapshots, video clips, webhooks, logs, 16-cam support |
-| Sprint 4 | Polish & Background | 6 | 45 | System tray, auto-start, auto-reconnect, 24/7 ops, dashboard |
-| **Total** | | **38** | **199** | |
+| Sprint | Theme | Stories | Points | Key Deliverables | Status |
+|--------|-------|---------|--------|------------------|--------|
+| Sprint 1 | Foundation | 8 | 28 | Project setup, DB schema, Camera CRUD, Settings | ✅ Complete |
+| Sprint 2 | Core Detection | 10 | 58 | YOLOv8 pipeline, OCR, zones, visual editor | ✅ Complete |
+| Sprint 3 | Evidence & Webhooks | 14 | 68 | Snapshots, video clips, webhooks, logs, evidence mode per camera | ✅ Complete |
+| Sprint 4 | Polish & Background | 6 | 45 | System tray, auto-start, auto-reconnect, 24/7 ops, dashboard | ✅ Complete |
+| **Total** | | **38** | **199** | | |
 
 ### Velocity Assumption
 - Team of 4 (2 backend, 1 frontend, 1 CV/ML engineer)

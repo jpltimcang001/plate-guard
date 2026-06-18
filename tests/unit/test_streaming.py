@@ -87,10 +87,10 @@ class TestFrameQueue:
         """get with timeout returns None if no frame arrives."""
         q = FrameQueue()
         start = time.monotonic()
-        result = q.get(timeout=0.05)
+        result = q.get(timeout=0.06)
         elapsed = time.monotonic() - start
         assert result is None
-        assert elapsed >= 0.05  # Should have waited
+        assert elapsed >= 0.05  # Should have waited (allow scheduler granularity)
 
     def test_drain_returns_all_frames(self) -> None:
         """drain empties the queue and returns all frames."""

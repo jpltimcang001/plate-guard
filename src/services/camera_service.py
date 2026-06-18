@@ -60,6 +60,7 @@ class CameraService:
         rtsp_url: str | None = None,
         usb_index: int | None = None,
         confidence_threshold: float = 0.5,
+        evidence_mode: str = "snapshot",
     ) -> CameraDTO:
         """Add a new camera.
 
@@ -69,6 +70,7 @@ class CameraService:
             rtsp_url: RTSP URL (required for RTSP).
             usb_index: USB index (required for USB).
             confidence_threshold: Detection threshold (0.0–1.0).
+            evidence_mode: Evidence capture mode.
 
         Returns:
             A ``CameraDTO`` representing the newly created camera.
@@ -80,12 +82,14 @@ class CameraService:
 
         """
         logger.info(
-            "Adding camera: name={}, type={}, rtsp_url={}, usb_index={}, threshold={}",
+            "Adding camera: name={}, type={}, rtsp_url={}, usb_index={}, "
+            "threshold={}, evidence_mode={}",
             name,
             camera_type,
             rtsp_url,
             usb_index,
             confidence_threshold,
+            evidence_mode,
         )
 
         # --- Validate name uniqueness ---
@@ -110,6 +114,8 @@ class CameraService:
         else:
             raise ValueError(f"Unsupported camera type: {camera_type}")
 
+        camera.evidence_mode = evidence_mode
+
         # --- Validate USB device exists ---
         if camera_type == CameraType.USB and self._usb_enumerator is not None:
             available = self._usb_enumerator.list_devices()
@@ -132,6 +138,7 @@ class CameraService:
         rtsp_url: str | None = None,
         usb_index: int | None = None,
         confidence_threshold: float | None = None,
+        evidence_mode: str | None = None,
     ) -> CameraDTO:
         """Edit an existing camera.
 
@@ -141,6 +148,7 @@ class CameraService:
             rtsp_url: New RTSP URL (optional).
             usb_index: New USB index (optional).
             confidence_threshold: New threshold (optional).
+            evidence_mode: New evidence mode (optional).
 
         Returns:
             The updated ``CameraDTO``.
@@ -171,6 +179,9 @@ class CameraService:
 
         if confidence_threshold is not None:
             camera.confidence_threshold = confidence_threshold
+
+        if evidence_mode is not None:
+            camera.evidence_mode = evidence_mode
 
         # --- Validate ---
         camera.validate()
@@ -257,10 +268,10 @@ class CameraService:
             CameraNotFoundError: If the camera does not exist.
 
         """
-        camera = self._repo.get_by_id(camera_id)
-        if camera is None:
+        model = self._repo.get_by_id(camera_id)
+        if model is None:
             raise CameraNotFoundError(camera_id)
-        return self._to_dto(camera)
+        return self._to_dto(Camera.from_model(model))
 
     def get_all_cameras(self) -> list[CameraDTO]:
         """Retrieve all cameras.
@@ -269,7 +280,7 @@ class CameraService:
             A list of ``CameraDTO`` instances.
 
         """
-        cameras = self._repo.get_all()
+        cameras = Camera.from_model_list(self._repo.get_all())
         return [self._to_dto(c) for c in cameras]
 
     def get_enabled_cameras(self) -> list[CameraDTO]:
@@ -279,7 +290,7 @@ class CameraService:
             A list of ``CameraDTO`` instances for enabled cameras.
 
         """
-        cameras = self._repo.get_enabled()
+        cameras = Camera.from_model_list(self._repo.get_enabled())
         return [self._to_dto(c) for c in cameras]
 
     def enumerate_usb_devices(self) -> list[UsbDeviceInfo]:
@@ -316,6 +327,7 @@ class CameraService:
             usb_index=camera.usb_index,
             enabled=camera.enabled,
             confidence_threshold=camera.confidence_threshold,
+            evidence_mode=camera.evidence_mode,
             created_at=camera.created_at,
             updated_at=camera.updated_at,
         )
