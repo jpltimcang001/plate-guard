@@ -38,15 +38,11 @@ env:
 # ---------------------------------------------------------------------------
 jobs:
   # -------------------------------------------------------------------------
-  # 1. Test — run the full test suite on all platforms
+  # 1a. Test (Linux) — run the full test suite including integration tests
   # -------------------------------------------------------------------------
-  test:
-    name: "Test (${{ matrix.os }})"
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+  test-linux:
+    name: "Test (Linux)"
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -57,8 +53,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install system dependencies (Linux)
-        if: runner.os == 'Linux'
+      - name: Install system dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
@@ -74,17 +69,10 @@ jobs:
         shell: bash
         run: python -m pip install --upgrade pip
 
-      - name: Install project (editable with extras)
-        id: pip_editable
-        continue-on-error: true
-        shell: bash
-        run: pip install -e ".[dev,test]"
-
-      - name: Install fallback dependencies (editable install unavailable)
-        if: steps.pip_editable.outcome == 'failure'
+      - name: Install project dependencies
         shell: bash
         run: |
-          pip install \
+          pip install -e ".[dev,test]" || pip install \
             PySide6 \
             "sqlalchemy>=2.0" \
             opencv-python-headless \
@@ -97,23 +85,21 @@ jobs:
             pytest-cov
 
       - name: Run unit tests
+        shell: bash
         run: |
           pytest tests/unit/ -v --tb=short --cov=src --cov-report=term-missing
 
       - name: Run integration tests
-        if: runner.os == 'Linux'
+        shell: bash
         run: |
           pytest tests/integration/ -v --tb=short
 
   # -------------------------------------------------------------------------
-  # 2. Build — create PyInstaller bundle + Inno Setup installer (Windows only)
+  # 1b. Test (Windows) — run unit tests on the target build platform
   # -------------------------------------------------------------------------
-  build:
-    name: "Build Windows Installer"
-    needs: [test]
+  test-windows:
+    name: "Test (Windows)"
     runs-on: windows-latest
-    # Only run on Windows (the matrix above tests Linux, but build is Windows-only)
-    if: always() && needs.test.result == 'success'
 
     steps:
       - name: Checkout repository
@@ -124,15 +110,83 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install build tools
+      - name: Upgrade pip
+        shell: pwsh
+        run: python -m pip install --upgrade pip
+
+      - name: Install project dependencies
         shell: pwsh
         run: |
-          # PyInstaller
-          pip install pyinstaller
+          pip install -e ".[dev,test]" 2>$null; if (-not $?) {
+            pip install `
+              PySide6 `
+              "sqlalchemy>=2.0" `
+              opencv-python `
+              ultralytics `
+              paddleocr `
+              httpx `
+              loguru `
+              numpy `
+              pytest `
+              pytest-cov
+          }
 
-          # Inno Setup (via Chocolatey)
-          choco install innosetup --no-progress -y
-          echo "ISCC_DIR=C:\Program Files (x86)\Inno Setup 6" >> $env:GITHUB_ENV
+      - name: Run unit tests
+        shell: pwsh
+        run: |
+          pytest tests/unit/ -v --tb=short --cov=src --cov-report=term-missing
+
+  # -------------------------------------------------------------------------
+  # 2. Build — create PyInstaller bundle + Inno Setup installer (Windows only)
+  # -------------------------------------------------------------------------
+  build:
+    name: "Build Windows Installer"
+    needs: [test-windows]
+    runs-on: windows-latest
+    if: success()
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install PyInstaller
+        shell: pwsh
+        run: pip install pyinstaller
+
+      - name: Install Inno Setup
+        id: innosetup
+        shell: pwsh
+        run: |
+          # Try Chocolatey first (fastest on GH-hosted runners)
+          $isccDir = "C:\Program Files (x86)\Inno Setup 6"
+          try {
+            choco install innosetup --no-progress -y --limit-output 2>$null
+            if (Test-Path "$isccDir\ISCC.exe") {
+              echo "ISCC_DIR=$isccDir" >> $env:GITHUB_ENV
+              return
+            }
+          } catch {
+            Write-Warning "Chocolatey install failed, trying direct download..."
+          }
+
+          # Fallback: download portable Inno Setup
+          $url = "https://jrsoftware.org/download.php/is.exe"
+          $out = "$env:TEMP\innosetup.exe"
+          Write-Host "Downloading Inno Setup from $url ..."
+          Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing
+          Start-Process -Wait -FilePath $out -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /DIR=$isccDir"
+          if (Test-Path "$isccDir\ISCC.exe") {
+            echo "ISCC_DIR=$isccDir" >> $env:GITHUB_ENV
+            Write-Host "Inno Setup installed to $isccDir"
+          } else {
+            Write-Error "Could not install Inno Setup (expected ISCC.exe at $isccDir)"
+            exit 1
+          }
 
       - name: Install project dependencies
         shell: pwsh
@@ -172,11 +226,19 @@ jobs:
             Write-Warning "models/plate.pt is a placeholder. Replace with actual YOLO weights before release."
           }
 
+      - name: Compute build version for artifacts
+        id: build_version
+        shell: pwsh
+        run: |
+          $ver = "${{ github.event.inputs.version || github.ref_name }}"
+          $ver = $ver -replace '^v', ''
+          echo "version=$ver" >> $env:GITHUB_OUTPUT
+          echo "version=$ver"
+
       - name: Build with PyInstaller
         shell: pwsh
         run: |
-          $version = "${{ github.event.inputs.version || github.ref_name }}"
-          $version = $version -replace '^v', ''
+          $version = "${{ steps.build_version.outputs.version }}"
           pyinstaller plate_guard.spec -- --version $version
 
       - name: Verify PyInstaller output
@@ -193,8 +255,7 @@ jobs:
       - name: Create portable zip archive
         shell: pwsh
         run: |
-          $version = "${{ github.event.inputs.version || github.ref_name }}"
-          $version = $version -replace '^v', ''
+          $version = "${{ steps.build_version.outputs.version }}"
           $zipName = "PlateGuard-portable-$version.zip"
           Compress-Archive -Path "build\exe.win-amd64-3.14\PlateGuard\*" -DestinationPath $zipName
           Write-Host "Created $zipName"
@@ -241,14 +302,14 @@ jobs:
       - name: Upload PyInstaller bundle (portable)
         uses: actions/upload-artifact@v4
         with:
-          name: PlateGuard-portable-${{ github.ref_name }}
+          name: PlateGuard-portable-${{ steps.build_version.outputs.version }}
           path: PlateGuard-portable-*.zip
           retention-days: 7
 
       - name: Upload Inno Setup installer
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ASSET_NAME }}-${{ github.ref_name }}
+          name: ${{ env.ASSET_NAME }}-${{ steps.build_version.outputs.version }}
           path: dist\PlateRecognitionSetup.exe
           retention-days: 7
 
@@ -259,7 +320,10 @@ jobs:
     name: "Publish GitHub Release"
     needs: [build]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Run on:
+    #   - tag push (refs/tags/v*)
+    #   - manual workflow_dispatch with explicit version (create a draft release)
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
 
     permissions:
       contents: write
@@ -278,9 +342,30 @@ jobs:
       - name: List artifacts
         run: ls -lh artifacts/
 
-      - name: Extract version from tag
+      - name: Extract version
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+        shell: pwsh
+        run: |
+          # Tag push: "v1.2.3" → "1.2.3"
+          # Manual: use the input version
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $ver = "${{ github.event.inputs.version }}"
+          } else {
+            $ver = "${{ github.ref_name }}" -replace '^v', ''
+          }
+          echo "version=$ver" >> $env:GITHUB_OUTPUT
+          echo "version=$ver"
+
+      - name: Determine tag name (workflow_dispatch uses a temporary tag)
+        id: tag
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $tag = "v${{ steps.version.outputs.version }}"
+          } else {
+            $tag = "${{ github.ref_name }}"
+          }
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
 
       - name: Generate release notes
         id: notes
@@ -325,10 +410,10 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ steps.tag.outputs.tag }}
           name: "Plate Guard v${{ steps.version.outputs.version }}"
           body_path: ${{ steps.notes.outputs.notes_file }}
-          draft: false
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
           prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
           files: |
             artifacts/PlateRecognitionSetup.exe
